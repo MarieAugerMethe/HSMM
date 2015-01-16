@@ -145,28 +145,18 @@ m0.HSMM.mllk <- function(parvect,OBS){
     obs <- obs[1:n,]
     allprobs <- matrix(rep(1,sum(m)*n),nrow=n)
     
-#     # For behaviour 1
-#     # Step length probability
-#     allprobs[!is.na(obs[,1]),1:m[1]] <- dweibull(obs[!is.na(obs[,1]),1],shape=lpn$b[1],scale=lpn$a[1])
-#     # Turn angle probability
-#     allprobs[!is.na(obs[,2]),1:m[1]] <- dwrpcauchy(obs[!is.na(obs[,2]),2],mu=lpn$co[1],rho=lpn$kappa[1])*allprobs[!is.na(obs[,2]),1:m[1]]
-#     
-#     # For behaviour 2
-#     # Step length probability
-#     allprobs[!is.na(obs[,1]),(m[1]+1):sum(m)] <- dweibull(obs[!is.na(obs[,1]),1],shape=lpn$b[2],scale=lpn$a[2])
-#     # Turn angle probability
-#     allprobs[!is.na(obs[,2]),(m[1]+1):sum(m)] <- dwrpcauchy(obs[!is.na(obs[,2]),2],mu=lpn$co[2],rho=lpn$kappa[2])*allprobs[!is.na(obs[,2]),1:m[1]]
+    # For behaviour 1
+    # Step length probability
+    allprobs[!is.na(obs[,1]),1:m[1]] <- dweibull(obs[!is.na(obs[,1]),1],shape=lpn$b[1],scale=lpn$a[1])
+    # Turn angle probability
+    allprobs[!is.na(obs[,2]),1:m[1]] <- dwrpcauchy(obs[!is.na(obs[,2]),2],mu=lpn$co[1],rho=lpn$kappa[1])*allprobs[!is.na(obs[,2]),1:m[1]]
     
-    for (k in 1:n){
-      if (!is.na(obs[k,1])) {
-        # For behaviour 1
-        angle.prob <- ifelse(is.na(obs[k,2]),1,dwrpcauchy(obs[k,2],mu=lpn$co[1],rho=lpn$kappa[1])) # Prob. Turning angles
-        allprobs[k,1:m[1]] <- dweibull(obs[k,1],shape=lpn$b[1],scale=lpn$a[1])*angle.prob #Prob .Step length * turning angle 
-        # For behaviour 2
-        angle.prob <- ifelse(is.na(obs[k,2]),1,dwrpcauchy(obs[k,2],mu=lpn$co[2],rho=lpn$kappa[2]))
-        allprobs[k,(m[1]+1):sum(m)] <- dweibull(obs[k,1],shape=lpn$b[2],scale=lpn$a[2])*angle.prob 
-      }  
-    }  
+    # For behaviour 2
+    # Step length probability
+    allprobs[!is.na(obs[,1]),(m[1]+1):sum(m)] <- dweibull(obs[!is.na(obs[,1]),1],shape=lpn$b[2],scale=lpn$a[2])
+    # Turn angle probability
+    allprobs[!is.na(obs[,2]),(m[1]+1):sum(m)] <- dwrpcauchy(obs[!is.na(obs[,2]),2],mu=lpn$co[2],rho=lpn$kappa[2])*allprobs[!is.na(obs[,2]),(m[1]+1):sum(m)]
+     
     foo <- delta  
     lscale <- 0
     for (i in 1:n){

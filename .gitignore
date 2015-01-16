@@ -1,0 +1,10 @@
+# Ignore R project files
+*.Rproj.user
+*.Rhistory
+*.RData
+*.RProj
+
+# Ignore data files
+beardata.csv
+GB_SI.csv
+MackenzieCollarDeploy.csv

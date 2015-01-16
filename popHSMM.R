@@ -50,19 +50,21 @@ gen.Gamma <- function(m,pSize,pSP){
   Gamma[1,m[1]+1] <- dnbinom(0,size=pSize[1],prob=pSP[1])
   Gamma[1,2] <- 1-Gamma[1,m[1]+1]
   for (i in 2:(m[1]-1)){
-    cc<-rep(1,sum(m))
+    cc <- rep(1,sum(m))
+    #cc[1:(i-1)] <- diag(matrix(Gamma[1:(i-1),2:i]))
     for (k in 1:(i-1)) {cc[k] <- Gamma[k,k+1]}
-    dd<-prod(cc)
+    dd <- prod(cc)
     if (dd>1e-12) Gamma[i,m[1]+1] <- dnbinom(i-1,size=pSize[1],prob=pSP[1])/dd
     if (dd<1e-12) Gamma[i,m[1]+1] <- 1
     Gamma[i,i+1] <- 1-Gamma[i,m[1]+1]
   } 
-  cc<-rep(1,sum(m))
+  cc <- rep(1,sum(m))
   for (k in 1:(m[1]-1)){cc[k] <- Gamma[k,k+1]}
-  dd<-prod(cc)
+  dd <- prod(cc)
   if (dd>1e-12) Gamma[m[1],m[1]+1] <- dnbinom(m[1]-1,size=pSize[1],prob=pSP[1])/dd
   if (dd<1e-12) Gamma[m[1],m[1]+1] <- 1
   Gamma[m[1],m[1]] <- 1-Gamma[m[1],m[1]+1] 
+  
   ## state aggregate 2
   Gamma[m[1]+1,1] <- dnbinom(0,size=pSize[2],prob=pSP[2])
   Gamma[m[1]+1,m[1]+2] <- 1-Gamma[m[1]+1,1]
@@ -82,6 +84,7 @@ gen.Gamma <- function(m,pSize,pSP){
   Gamma[m[1]+m[2],m[1]+m[2]] <- 1-Gamma[m[1]+m[2],1] 
   Gamma 
 }
+
 ## function that transforms each of the (possibly constrained) parameters to the real line
 # Function to transform parameters
 move.HSMM.pn2pw <- function(a,b,kappa,gamSize,gamSP,co){
@@ -141,14 +144,27 @@ m0.HSMM.mllk <- function(parvect,OBS){
     n <- max(which(!is.na(obs[,1])))
     obs <- obs[1:n,]
     allprobs <- matrix(rep(1,sum(m)*n),nrow=n)
+    
+#     # For behaviour 1
+#     # Step length probability
+#     allprobs[!is.na(obs[,1]),1:m[1]] <- dweibull(obs[!is.na(obs[,1]),1],shape=lpn$b[1],scale=lpn$a[1])
+#     # Turn angle probability
+#     allprobs[!is.na(obs[,2]),1:m[1]] <- dwrpcauchy(obs[!is.na(obs[,2]),2],mu=lpn$co[1],rho=lpn$kappa[1])*allprobs[!is.na(obs[,2]),1:m[1]]
+#     
+#     # For behaviour 2
+#     # Step length probability
+#     allprobs[!is.na(obs[,1]),(m[1]+1):sum(m)] <- dweibull(obs[!is.na(obs[,1]),1],shape=lpn$b[2],scale=lpn$a[2])
+#     # Turn angle probability
+#     allprobs[!is.na(obs[,2]),(m[1]+1):sum(m)] <- dwrpcauchy(obs[!is.na(obs[,2]),2],mu=lpn$co[2],rho=lpn$kappa[2])*allprobs[!is.na(obs[,2]),1:m[1]]
+    
     for (k in 1:n){
       if (!is.na(obs[k,1])) {
         # For behaviour 1
         angle.prob <- ifelse(is.na(obs[k,2]),1,dwrpcauchy(obs[k,2],mu=lpn$co[1],rho=lpn$kappa[1])) # Prob. Turning angles
-        allprobs[k,1:m[1]] <- rep(dweibull(obs[k,1],shape=lpn$b[1],scale=lpn$a[1])*angle.prob,m[1]) #Prob .Step length * turning angle 
+        allprobs[k,1:m[1]] <- dweibull(obs[k,1],shape=lpn$b[1],scale=lpn$a[1])*angle.prob #Prob .Step length * turning angle 
         # For behaviour 2
         angle.prob <- ifelse(is.na(obs[k,2]),1,dwrpcauchy(obs[k,2],mu=lpn$co[2],rho=lpn$kappa[2]))
-        allprobs[k,(m[1]+1):sum(m)] <- rep(dweibull(obs[k,1],shape=lpn$b[2],scale=lpn$a[2])*angle.prob,m[2]) 
+        allprobs[k,(m[1]+1):sum(m)] <- dweibull(obs[k,1],shape=lpn$b[2],scale=lpn$a[2])*angle.prob 
       }  
     }  
     foo <- delta  

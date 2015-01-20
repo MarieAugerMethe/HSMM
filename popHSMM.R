@@ -44,7 +44,7 @@ bearsCap$GroupFL <- as.numeric(as.factor(bearsCap$Group))
 #####################################################
 # Define functions common to all models
 ## function that derives the t.p.m. of the HMM that represents the HSMM (see Langrock and Zucchini, 2011) 
-gen.Gamma <- function(m,pSize,pSP){
+gen.GammaO <- function(m,pSize,pSP){
   Gamma <- diag(sum(m))*0
   ## state aggregate 1
   Gamma[1,m[1]+1] <- dnbinom(0,size=pSize[1],prob=pSP[1])
@@ -83,6 +83,28 @@ gen.Gamma <- function(m,pSize,pSP){
   if (dd<1e-12) Gamma[m[1]+m[2],1] <- 1
   Gamma[m[1]+m[2],m[1]+m[2]] <- 1-Gamma[m[1]+m[2],1] 
   Gamma 
+}
+
+gen.Gamma <- function(m,pSize,pSP){
+  Gamma <- diag(m[1]+m[2])*0
+  probs1 <- dnbinom(0:(m[1]-1),size=pSize[1],prob=pSP[1])
+  probs2 <- dnbinom(0:(m[2]-1),size=pSize[2],prob=pSP[2])
+  den1 <- 1-c(0,pnbinom(0:(m[1]-1),size=pSize[1],prob=pSP[1]))
+  den2 <- 1-c(0,pnbinom(0:(m[2]-1),size=pSize[2],prob=pSP[2]))
+  
+  if (length(which(den1<1e-10))>0) {probs1[which(den1<1e-10)]<-1; den1[which(den1<1e-10)] <- 1}
+  if (length(which(den2<1e-10))>0) {probs2[which(den2<1e-10)]<-1; den2[which(den2<1e-10)] <- 1}
+  ## state aggregate 1
+  for (i in 1:(m[1])){
+    Gamma[i,m[1]+1] <- probs1[i]/den1[i]
+    ifelse(i!=m[1],Gamma[i,i+1]<-1-Gamma[i,m[1]+1],Gamma[i,i]<-1-Gamma[i,m[1]+1])
+  }
+  ## state aggregate 2
+  for (i in 1:(m[2])){
+    Gamma[m[1]+i,1] <- probs2[i]/den2[i]
+    ifelse(i!=m[2],Gamma[m[1]+i,m[1]+i+1]<-1-Gamma[m[1]+i,1],Gamma[m[1]+i,m[1]+i]<-1-Gamma[m[1]+i,1])
+  }
+  Gamma
 }
 
 gen.Gamma.repar <- function(m,pSize,pMu){
@@ -663,7 +685,7 @@ cbind(AIC=modAIC, deltaAIC=modAIC - min(modAIC),
                 m1bHSMM$OptCode,m1iHSMM$OptCode,m1eHSMM$OptCode,
                 m2bHSMMr$OptCode,m2iHSMMr$OptCode,m2eHSMMr$OptCode))
 
-
+modAIC <-  c(M2Bo=m2bHSMM$AIC,M2Io=m2iHSMM$AIC,M2B=m2bHSMMr$AIC,M2I=m2iHSMMr$AIC,M2E=m2eHSMMr$AIC) 
 
 ###########
 bearModels<- read.csv("HSMMini0.csv")

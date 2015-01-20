@@ -44,50 +44,6 @@ bearsCap$GroupFL <- as.numeric(as.factor(bearsCap$Group))
 #####################################################
 # Define functions common to all models
 ## function that derives the t.p.m. of the HMM that represents the HSMM (see Langrock and Zucchini, 2011) 
-gen.GammaO <- function(m,pSize,pSP){
-  Gamma <- diag(sum(m))*0
-  ## state aggregate 1
-  Gamma[1,m[1]+1] <- dnbinom(0,size=pSize[1],prob=pSP[1])
-  Gamma[1,2] <- 1-Gamma[1,m[1]+1]
-  for (i in 2:(m[1]-1)){
-    cc <- rep(1,sum(m))
-    for (k in 1:(i-1)) {cc[k] <- Gamma[k,k+1]}
-    dd <- prod(cc)
-    #dd <- sum(cc)
-    if (dd>1e-12) Gamma[i,m[1]+1] <- dnbinom(i-1,size=pSize[1],prob=pSP[1])/dd
-    if (dd<1e-12) Gamma[i,m[1]+1] <- 1
-    Gamma[i,i+1] <- 1-Gamma[i,m[1]+1]
-  } 
-  cc <- rep(1,sum(m))
-  for (k in 1:(m[1]-1)){cc[k] <- Gamma[k,k+1]}
-  dd <- prod(cc)
-  #dd <- sum(cc)
-  if (dd>1e-12) Gamma[m[1],m[1]+1] <- dnbinom(m[1]-1,size=pSize[1],prob=pSP[1])/dd
-  if (dd<1e-12) Gamma[m[1],m[1]+1] <- 1
-  Gamma[m[1],m[1]] <- 1-Gamma[m[1],m[1]+1] 
-  
-  ## state aggregate 2
-  Gamma[m[1]+1,1] <- dnbinom(0,size=pSize[2],prob=pSP[2])
-  Gamma[m[1]+1,m[1]+2] <- 1-Gamma[m[1]+1,1]
-  for (i in 2:(m[2]-1)){
-    cc <- rep(1,sum(m))
-    for (k in 1:(i-1)) {cc[k] <- Gamma[m[1]+k,m[1]+k+1]}
-    dd <- prod(cc)
-    #dd <- sum(cc)
-    if (dd>1e-12) Gamma[m[1]+i,1] <- dnbinom(i-1,size=pSize[2],prob=pSP[2])/dd
-    if (dd<1e-12) Gamma[m[1]+i,1] <- 1
-    Gamma[m[1]+i,m[1]+i+1] <- 1-Gamma[m[1]+i,1]
-  }
-  cc <- rep(1,sum(m))
-  for (k in 1:(m[2]-1)) {cc[k] <- Gamma[m[1]+k,m[1]+k+1]}
-  dd<-prod(cc)
-  #dd <- sum(cc)
-  if (dd>1e-12) Gamma[m[1]+m[2],1] <- dnbinom(m[2]-1,size=pSize[2],prob=pSP[2])/dd
-  if (dd<1e-12) Gamma[m[1]+m[2],1] <- 1
-  Gamma[m[1]+m[2],m[1]+m[2]] <- 1-Gamma[m[1]+m[2],1] 
-  Gamma 
-}
-
 gen.Gamma <- function(m,pSize,pSP){
   Gamma <- diag(m[1]+m[2])*0
   # p(r), for r=1,2,...N* (note that r=1 is 0 in dnbinom)
@@ -145,47 +101,6 @@ gen.Gamma.repar <- function(m,pSize,pMu){
   diag(Gamma[m[1]+1:(m[2]-1),m[1]+2:m[2]]) <- 1 - Gamma[m[1]+1:(m[2]-1),1] # 1-c_2(r), for r=1,2,...,N_2*-1
   Gamma[m[1]+m[2],m[1]+m[2]] <- 1 - Gamma[m[1]+m[2],1] # 1-c_2(N_2*)
   return(Gamma)
-}
-
-gen.Gamma.reparO <- function(m,pSize,pMu){
-  Gamma <- diag(sum(m))*0
-  ## state aggregate 1
-  Gamma[1,m[1]+1] <- dnbinom(0,size=pSize[1],mu=pMu[1])
-  Gamma[1,2] <- 1-Gamma[1,m[1]+1]
-  for (i in 2:(m[1]-1)){
-    cc <- rep(1,sum(m))
-    #cc[1:(i-1)] <- diag(matrix(Gamma[1:(i-1),2:i]))
-    for (k in 1:(i-1)) {cc[k] <- Gamma[k,k+1]}
-    dd <- prod(cc)
-    if (dd>1e-12) Gamma[i,m[1]+1] <- dnbinom(i-1,size=pSize[1],mu=pMu[1])/dd
-    if (dd<1e-12) Gamma[i,m[1]+1] <- 1
-    Gamma[i,i+1] <- 1-Gamma[i,m[1]+1]
-  } 
-  cc <- rep(1,sum(m))
-  for (k in 1:(m[1]-1)){cc[k] <- Gamma[k,k+1]}
-  dd <- prod(cc)
-  if (dd>1e-12) Gamma[m[1],m[1]+1] <- dnbinom(m[1]-1,size=pSize[1],mu=pMu[1])/dd
-  if (dd<1e-12) Gamma[m[1],m[1]+1] <- 1
-  Gamma[m[1],m[1]] <- 1-Gamma[m[1],m[1]+1] 
-  
-  ## state aggregate 2
-  Gamma[m[1]+1,1] <- dnbinom(0,size=pSize[2],mu=pMu[2])
-  Gamma[m[1]+1,m[1]+2] <- 1-Gamma[m[1]+1,1]
-  for (i in 2:(m[2]-1)){
-    cc <- rep(1,sum(m))
-    for (k in 1:(i-1)) {cc[k] <- Gamma[m[1]+k,m[1]+k+1]}
-    dd <- prod(cc)
-    if (dd>1e-12) Gamma[m[1]+i,1] <- dnbinom(i-1,size=pSize[2],mu=pMu[2])/dd
-    if (dd<1e-12) Gamma[m[1]+i,1] <- 1
-    Gamma[m[1]+i,m[1]+i+1] <- 1-Gamma[m[1]+i,1]
-  }
-  cc<-rep(1,sum(m))
-  for (k in 1:(m[2]-1)) {cc[k] <- Gamma[m[1]+k,m[1]+k+1]}
-  dd<-prod(cc)
-  if (dd>1e-12) Gamma[m[1]+m[2],1] <- dnbinom(m[2]-1,size=pSize[2],mu=pMu[2])/dd
-  if (dd<1e-12) Gamma[m[1]+m[2],1] <- 1
-  Gamma[m[1]+m[2],m[1]+m[2]] <- 1-Gamma[m[1]+m[2],1] 
-  Gamma 
 }
 
 

@@ -92,8 +92,10 @@ gen.Gamma <- function(m,pSize,pSP){
   den1 <- 1-c(0,pnbinom(0:(m[1]-1),size=pSize[1],prob=pSP[1]))
   den2 <- 1-c(0,pnbinom(0:(m[2]-1),size=pSize[2],prob=pSP[2]))
   
-  if (length(which(den1<1e-10))>0) {probs1[which(den1<1e-10)]<-1; den1[which(den1<1e-10)] <- 1}
-  if (length(which(den2<1e-10))>0) {probs2[which(den2<1e-10)]<-1; den2[which(den2<1e-10)] <- 1}
+  probs1[which(den1<1e-10)] <- 1
+  den1[which(den1<1e-10)] <- 1
+  probs2[which(den2<1e-10)] <- 1
+  den2[which(den2<1e-10)] <- 1
   ## state aggregate 1
   for (i in 1:(m[1])){
     Gamma[i,m[1]+1] <- probs1[i]/den1[i]

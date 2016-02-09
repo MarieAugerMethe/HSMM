@@ -5,7 +5,9 @@
 *.RProj
 
 # Ignore data files
+grizzlyIs.csv
 beardata.csv
-GB_SI.csv
-MackenzieCollarDeploy.csv
 .Rproj.user
+
+# Ignore old files
+Old/*

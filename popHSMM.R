@@ -24,21 +24,15 @@ library(CircStats) # for wrapped Cauchy
 # with p being the number of individuals, 
 # and the observed step lengths and turning angles for individual i 
 # given in columns 2*(i-1)+1 and 2*(i-1)+2, respectively
-#OBS <- read.csv("minidata.csv")
 OBS <- read.csv("beardata.csv")
 
 ##
 # Covariate data - diet!
-bearsSI <- read.csv("GB_SI.csv")
+bearsCap <- read.csv("grizzlyIs.csv")
 
-# Link bear ID (diet) with PTT ID (movement)
-bearsCap <- read.csv("MackenzieCollarDeploy.csv") 
-# Sort by Year (so we get first capture)
-bearsCap <- bearsCap[order(bearsCap$Date),]
-bearsCap <- bearsCap[match(unique(substring(colnames(OBS),4,8)), bearsCap$PTT_ID),]
-bearsCap <- cbind(bearsCap[,c("BearID","PTT_ID")], bearsSI[match(bearsCap$BearID, bearsSI$BearID),
-                                    c("Sex", "deltaN", "dealtaC", "Group")])
-bearsCap$GroupFL <- as.numeric(as.factor(bearsCap$Group))
+# Same order
+OBS[1:2,1:8]
+bearsCap[1:4,]
 
 #####################################################
 # Define functions common to all models
@@ -174,13 +168,13 @@ m1b.HSMM.mllk <- function(parvect,OBS){
     
     # For behaviour 1
     # Step length probability
-    allprobs[!is.na(obs[,1]),1:m[1]] <- dweibull(obs[!is.na(obs[,1]),1],shape=lpn$b[1],scale=lpn$a[bearsCap$GroupFL[ani]])
+    allprobs[!is.na(obs[,1]),1:m[1]] <- dweibull(obs[!is.na(obs[,1]),1],shape=lpn$b[1],scale=lpn$a[bearsCap$F_Group[ani]])
     # Turn angle probability
     allprobs[!is.na(obs[,2]),1:m[1]] <- dwrpcauchy(obs[!is.na(obs[,2]),2],mu=lpn$co[1],rho=lpn$kappa[1])*allprobs[!is.na(obs[,2]),1:m[1]]
     
     # For behaviour 2
     # Step length probability
-    allprobs[!is.na(obs[,1]),(m[1]+1):sum(m)] <- dweibull(obs[!is.na(obs[,1]),1],shape=lpn$b[2],scale=lpn$a[nDiet+bearsCap$GroupFL[ani]])
+    allprobs[!is.na(obs[,1]),(m[1]+1):sum(m)] <- dweibull(obs[!is.na(obs[,1]),1],shape=lpn$b[2],scale=lpn$a[nDiet+bearsCap$F_Group[ani]])
     # Turn angle probability
     allprobs[!is.na(obs[,2]),(m[1]+1):sum(m)] <- dwrpcauchy(obs[!is.na(obs[,2]),2],mu=lpn$co[2],rho=lpn$kappa[2])*allprobs[!is.na(obs[,2]),(m[1]+1):sum(m)]
   
@@ -213,7 +207,7 @@ m1i.HSMM.mllk <- function(parvect,OBS){
     
     # For behaviour 1
     # Step length probability
-    allprobs[!is.na(obs[,1]),1:m[1]] <- dweibull(obs[!is.na(obs[,1]),1],shape=lpn$b[1],scale=lpn$a[bearsCap$GroupFL[ani]])
+    allprobs[!is.na(obs[,1]),1:m[1]] <- dweibull(obs[!is.na(obs[,1]),1],shape=lpn$b[1],scale=lpn$a[bearsCap$F_Group[ani]])
     # Turn angle probability
     allprobs[!is.na(obs[,2]),1:m[1]] <- dwrpcauchy(obs[!is.na(obs[,2]),2],mu=lpn$co[1],rho=lpn$kappa[1])*allprobs[!is.na(obs[,2]),1:m[1]]
     
@@ -258,7 +252,7 @@ m1e.HSMM.mllk <- function(parvect,OBS){
     
     # For behaviour 2
     # Step length probability
-    allprobs[!is.na(obs[,1]),(m[1]+1):sum(m)] <- dweibull(obs[!is.na(obs[,1]),1],shape=lpn$b[2],scale=lpn$a[1+bearsCap$GroupFL[ani]])
+    allprobs[!is.na(obs[,1]),(m[1]+1):sum(m)] <- dweibull(obs[!is.na(obs[,1]),1],shape=lpn$b[2],scale=lpn$a[1+bearsCap$F_Group[ani]])
     # Turn angle probability
     allprobs[!is.na(obs[,2]),(m[1]+1):sum(m)] <- dwrpcauchy(obs[!is.na(obs[,2]),2],mu=lpn$co[2],rho=lpn$kappa[2])*allprobs[!is.na(obs[,2]),(m[1]+1):sum(m)]
       
@@ -283,7 +277,7 @@ m2b.HSMM.mllk <- function(parvect,OBS){
   lpn <- move.HSMM.pw2pn(parvect,M) # Transforming the parameters
   mllk.all <- 0 # Starting the likelihood
   for (ani in 1:n.ind){
-    gamma <- genGamma(m,lpn$gamLam[c(1,nDiet+1)+(bearsCap$GroupFL[ani]-1)]) # Creating transition probility matrix
+    gamma <- genGamma(m,lpn$gamLam[c(1,nDiet+1)+(bearsCap$F_Group[ani]-1)]) # Creating transition probility matrix
     delta <- solve(t(diag(sum(m))-gamma+1),rep(1,sum(m))) # Getting the probility of the first step - stationary distribution
     obs <- OBS[,((ani-1)*2+1):((ani-1)*2+2)]
     n <- max(which(!is.na(obs[,1])))
@@ -322,7 +316,7 @@ m2i.HSMM.mllk <- function(parvect,OBS){
   lpn <- move.HSMM.pw2pn(parvect,M) # Transforming the parameters
   mllk.all <- 0 # Starting the likelihood
   for (ani in 1:n.ind){
-    gamma <- genGamma(m,lpn$gamLam[c(bearsCap$GroupFL[ani], nDiet+1)]) # Creating transition probility matrix 
+    gamma <- genGamma(m,lpn$gamLam[c(bearsCap$F_Group[ani], nDiet+1)]) # Creating transition probility matrix 
     delta <- solve(t(diag(sum(m))-gamma+1),rep(1,sum(m))) # Getting the probility of the first step - stationary distribution
     obs <- OBS[,((ani-1)*2+1):((ani-1)*2+2)]
     n <- max(which(!is.na(obs[,1])))
@@ -361,7 +355,7 @@ m2e.HSMM.mllk <- function(parvect,OBS){
   lpn <- move.HSMM.pw2pn(parvect,M) # Transforming the parameters
   mllk.all <- 0 # Starting the likelihood
   for (ani in 1:n.ind){
-    gamma <- genGamma(m,lpn$gamLam[c(1, 1+bearsCap$GroupFL[ani])]) # Creating transition probility matrix - reparametrised
+    gamma <- genGamma(m,lpn$gamLam[c(1, 1+bearsCap$F_Group[ani])]) # Creating transition probility matrix - reparametrised
     delta <- solve(t(diag(sum(m))-gamma+1),rep(1,sum(m))) # Getting the probility of the first step - stationary distribution
     obs <- OBS[,((ani-1)*2+1):((ani-1)*2+2)]
     n <- max(which(!is.na(obs[,1])))
@@ -399,7 +393,7 @@ m2e.HSMM.mllk <- function(parvect,OBS){
 ## size of state aggregates
 m <- c(20,20)
 # Number of diets in dataset
-nDiet <- length(unique(bearsCap$GroupFL))
+nDiet <- length(unique(bearsCap$F_Group))
 #n.ind <- ncol(OBS)/2
 # Parameters that we do not change
 b0 <- c(0.8,0.85) # Weibull shape parameters
@@ -419,6 +413,10 @@ a0 <- c(0.8,0.9) # Weibull scale parameters - for all individual
 ## run the numerical maximization
 m0HSMM <- HSMMmle(OBS,a0,b0,kappa0,gammaLam0,co0,m0.HSMM.mllk,"M0")
 m0HSMM
+
+# means (note that I reversed a & b compared to dweibull)
+m0HSMM$a[1]*gamma(1+1/m0HSMM$b[1])
+m0HSMM$a[2]*gamma(1+1/m0HSMM$b[2])
 
 ###
 # Fitting M1B

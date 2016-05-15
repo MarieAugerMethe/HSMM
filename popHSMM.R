@@ -83,24 +83,50 @@ move.HSMM.pn2pw <- function(a,b,kapp,gamLam,co){
 move.HSMM.pw2pn <- function(parvect,M){
   epar <- exp(parvect)
   aE <- 2
-  if(M == "M1B"){aE <- 2*nDiet}
-  if(M == "M1I" | M == "M1E"){aE <- nDiet + 1}
   gE <- 2
-  if(M == "M2B"){gE <- 2*nDiet}
-  if(M == "M2I" | M == "M2E"){gE <- nDiet + 1}
-  a <- epar[1:aE]
+  #"M0"
+  a <- rep(epar[1:2], each=nDiet)
+  b <- rep(epar[3:4], each=nDiet)
+  if(M == "M1B"){
+    aE <- 2*nDiet
+    a <- epar[1:aE]
+  }
+  if(M == "M1I"){
+    aE <- nDiet + 1
+    a <- c(epar[1:nDiet], rep(epar[aE], nDiet))
+  }
+  if(M == "M1E"){
+    aE <- nDiet + 1
+    a <- c(rep(epar[1], nDiet), epar[2:aE])
+  }
+  
+  #a <- epar[1:aE]
   b <- epar[aE+(1:2)]
   kapp <- inv.logit(parvect[aE+(3:4)])
-  gamLam <- exp(parvect[aE+4+(1:gE)])
+  gamLam <- c(rep(epar[aE+5],nDiet), rep(epar[aE+6],nDiet))
+  if(M == "M2B"){
+    gE <- 2*nDiet
+    gamLam <- epar[aE+(4+(1:gE))]
+  }
+  if(M == "M2I"){
+    gE <- nDiet + 1
+    gamLam <- c(epar[aE+(4+(1:nDiet))], rep(epar[aE+(4+(gE))],nDiet)) 
+  }
+  if(M == "M2E"){
+    gE <- nDiet + 1
+    gamLam <- c(rep(epar[aE+5],nDiet), epar[aE+(4+(2:gE))])
+  }
+  
   co <- c(2*pi*inv.logit(parvect[aE+gE+5]),pi*(exp(parvect[aE+gE+6])-1)/(exp(parvect[aE+gE+6])+1))
   return(list(a=a,b=b,kappa=kapp,gamLam=gamLam,co=co))
+  
 }
 
 ###
 # Function that runs the numerical maximization of the above likelihood function and returns the results
-HSMMmle <- function(OBS,a0,b0,kappa0,gammaLam0,co0,mllk,M){
+HSMMmle <- function(OBS,a0,b0,kappa0,gammaLam0,co0,M){
   parvect0 <- move.HSMM.pn2pw(a0,b0,kappa0,gammaLam0,co0)
-  mod <- nlm(mllk,parvect0,OBS,print.level=2,hessian=TRUE,stepmax=stepm,iterlim=4000) ## hessian=TRUE only for confidence intervals 
+  mod <- nlm(HSMMmllk,parvect0,OBS,M,print.level=2,hessian=TRUE,stepmax=stepm,iterlim=4000) ## hessian=TRUE only for confidence intervals 
   pn <- move.HSMM.pw2pn(mod$estimate, M)
   modAIC <- mod$minimum*2 + 2*length(parvect0)
   list(a=pn$a,b=pn$b,kappa=pn$kappa,gamLam=pn$gamLam,co=pn$co,H=mod$hessian,
@@ -111,169 +137,8 @@ HSMMmle <- function(OBS,a0,b0,kappa0,gammaLam0,co0,mllk,M){
 #########################################################
 # Neg. log likelihood functions
 
-# M0: All bears are the same (all parameters are the same accros diet)
-m0.HSMM.mllk <- function(parvect,OBS){
+HSMMmllk <- function(parvect,OBS, M){
   n.ind <- ncol(OBS)/2
-  M <- "M0" # Define the model used
-  lpn <- move.HSMM.pw2pn(parvect,M) # Transforming the parameters
-  gamma <- genGamma(m,lpn$gamLam) # Creating transition probility matrix - reparametrised
-  delta <- solve(t(diag(sum(m))-gamma+1),rep(1,sum(m))) # Getting the probility of the first step - stationary distribution
-  mllk.all <- 0 # Starting the likelihood
-  for (ani in 1:n.ind){  
-    obs <- OBS[,((ani-1)*2+1):((ani-1)*2+2)]
-    n <- max(which(!is.na(obs[,1])))
-    obs <- obs[1:n,]
-    allprobs <- matrix(rep(1,sum(m)*n),nrow=n)
-    
-    # For behaviour 1
-    # Step length probability
-    allprobs[!is.na(obs[,1]),1:m[1]] <- dweibull(obs[!is.na(obs[,1]),1],shape=lpn$b[1],scale=lpn$a[1])
-    # Turn angle probability
-    allprobs[!is.na(obs[,2]),1:m[1]] <- dwrpcauchy(obs[!is.na(obs[,2]),2],mu=lpn$co[1],rho=lpn$kappa[1])*allprobs[!is.na(obs[,2]),1:m[1]]
-    
-    # For behaviour 2
-    # Step length probability
-    allprobs[!is.na(obs[,1]),(m[1]+1):sum(m)] <- dweibull(obs[!is.na(obs[,1]),1],shape=lpn$b[2],scale=lpn$a[2])
-    # Turn angle probability
-    allprobs[!is.na(obs[,2]),(m[1]+1):sum(m)] <- dwrpcauchy(obs[!is.na(obs[,2]),2],mu=lpn$co[2],rho=lpn$kappa[2])*allprobs[!is.na(obs[,2]),(m[1]+1):sum(m)]
-     
-    foo <- delta  
-    lscale <- 0
-    for (i in 1:n){
-      foo <- foo%*%gamma*allprobs[i,]  
-      sumfoo <- sum(foo)
-      lscale <- lscale+log(sumfoo)
-      foo <- foo/sumfoo
-    }
-    mllk.all <- mllk.all-lscale  
-  } 
-  return(mllk.all)
-}
-
-#############
-# M1: Bears of different diet differ in their Step length (scale of Weibull)
-# M1B: Differ in both intensive and extensive behaviours
-m1b.HSMM.mllk <- function(parvect,OBS){
-  n.ind <- ncol(OBS)/2
-  M <- "M1B" # Define the model used
-  lpn <- move.HSMM.pw2pn(parvect,M) # Transforming the parameters
-  gamma <- genGamma(m,lpn$gamLam) # Creating transition probility matrix - reparametrised
-  delta <- solve(t(diag(sum(m))-gamma+1),rep(1,sum(m))) # Getting the probility of the first step - stationary distribution
-  mllk.all <- 0 # Starting the likelihood
-  for (ani in 1:n.ind){  
-    obs <- OBS[,((ani-1)*2+1):((ani-1)*2+2)]
-    n <- max(which(!is.na(obs[,1])))
-    obs <- obs[1:n,]
-    allprobs <- matrix(rep(1,sum(m)*n),nrow=n)
-    
-    # For behaviour 1
-    # Step length probability
-    allprobs[!is.na(obs[,1]),1:m[1]] <- dweibull(obs[!is.na(obs[,1]),1],shape=lpn$b[1],scale=lpn$a[bearsCap$F_Group[ani]])
-    # Turn angle probability
-    allprobs[!is.na(obs[,2]),1:m[1]] <- dwrpcauchy(obs[!is.na(obs[,2]),2],mu=lpn$co[1],rho=lpn$kappa[1])*allprobs[!is.na(obs[,2]),1:m[1]]
-    
-    # For behaviour 2
-    # Step length probability
-    allprobs[!is.na(obs[,1]),(m[1]+1):sum(m)] <- dweibull(obs[!is.na(obs[,1]),1],shape=lpn$b[2],scale=lpn$a[nDiet+bearsCap$F_Group[ani]])
-    # Turn angle probability
-    allprobs[!is.na(obs[,2]),(m[1]+1):sum(m)] <- dwrpcauchy(obs[!is.na(obs[,2]),2],mu=lpn$co[2],rho=lpn$kappa[2])*allprobs[!is.na(obs[,2]),(m[1]+1):sum(m)]
-  
-    foo <- delta  
-    lscale <- 0
-    for (i in 1:n){
-      foo <- foo%*%gamma*allprobs[i,]  
-      sumfoo <- sum(foo)
-      lscale <- lscale+log(sumfoo)
-      foo <- foo/sumfoo
-    }
-    mllk.all <- mllk.all-lscale  
-  } 
-  return(mllk.all)
-}
-
-# M1I: Differ in intensive behaviour (potentially foraging)
-m1i.HSMM.mllk <- function(parvect,OBS){
-  n.ind <- ncol(OBS)/2
-  M <- "M1I" # Define the model used
-  lpn <- move.HSMM.pw2pn(parvect,M) # Transforming the parameters
-  gamma <- genGamma(m,lpn$gamLam) # Creating transition probility matrix - reparametrised
-  delta <- solve(t(diag(sum(m))-gamma+1),rep(1,sum(m))) # Getting the probility of the first step - stationary distribution
-  mllk.all <- 0 # Starting the likelihood
-  for (ani in 1:n.ind){  
-    obs <- OBS[,((ani-1)*2+1):((ani-1)*2+2)]
-    n <- max(which(!is.na(obs[,1])))
-    obs <- obs[1:n,]
-    allprobs <- matrix(rep(1,sum(m)*n),nrow=n)
-    
-    # For behaviour 1
-    # Step length probability
-    allprobs[!is.na(obs[,1]),1:m[1]] <- dweibull(obs[!is.na(obs[,1]),1],shape=lpn$b[1],scale=lpn$a[bearsCap$F_Group[ani]])
-    # Turn angle probability
-    allprobs[!is.na(obs[,2]),1:m[1]] <- dwrpcauchy(obs[!is.na(obs[,2]),2],mu=lpn$co[1],rho=lpn$kappa[1])*allprobs[!is.na(obs[,2]),1:m[1]]
-    
-    # For behaviour 2
-    # Step length probability
-    allprobs[!is.na(obs[,1]),(m[1]+1):sum(m)] <- dweibull(obs[!is.na(obs[,1]),1],shape=lpn$b[2],scale=lpn$a[nDiet+1])
-    # Turn angle probability
-    allprobs[!is.na(obs[,2]),(m[1]+1):sum(m)] <- dwrpcauchy(obs[!is.na(obs[,2]),2],mu=lpn$co[2],rho=lpn$kappa[2])*allprobs[!is.na(obs[,2]),(m[1]+1):sum(m)]
-    
-    foo <- delta  
-    lscale <- 0
-    for (i in 1:n){
-      foo <- foo%*%gamma*allprobs[i,]  
-      sumfoo <- sum(foo)
-      lscale <- lscale+log(sumfoo)
-      foo <- foo/sumfoo
-    }
-    mllk.all <- mllk.all-lscale  
-  } 
-  return(mllk.all)
-}
-
-# M1E: Differ in extensive behaviour (potentially travelling)
-m1e.HSMM.mllk <- function(parvect,OBS){
-  n.ind <- ncol(OBS)/2
-  M <- "M1E" # Define the model used
-  lpn <- move.HSMM.pw2pn(parvect,M) # Transforming the parameters
-  gamma <- genGamma(m,lpn$gamLam) # Creating transition probility matrix - reparametrised
-  delta <- solve(t(diag(sum(m))-gamma+1),rep(1,sum(m))) # Getting the probility of the first step - stationary distribution
-  mllk.all <- 0 # Starting the likelihood
-  for (ani in 1:n.ind){  
-    obs <- OBS[,((ani-1)*2+1):((ani-1)*2+2)]
-    n <- max(which(!is.na(obs[,1])))
-    obs <- obs[1:n,]
-    allprobs <- matrix(rep(1,sum(m)*n),nrow=n)
-    
-    # For behaviour 1
-    # Step length probability
-    allprobs[!is.na(obs[,1]),1:m[1]] <- dweibull(obs[!is.na(obs[,1]),1],shape=lpn$b[1],scale=lpn$a[1])
-    # Turn angle probability
-    allprobs[!is.na(obs[,2]),1:m[1]] <- dwrpcauchy(obs[!is.na(obs[,2]),2],mu=lpn$co[1],rho=lpn$kappa[1])*allprobs[!is.na(obs[,2]),1:m[1]]
-    
-    # For behaviour 2
-    # Step length probability
-    allprobs[!is.na(obs[,1]),(m[1]+1):sum(m)] <- dweibull(obs[!is.na(obs[,1]),1],shape=lpn$b[2],scale=lpn$a[1+bearsCap$F_Group[ani]])
-    # Turn angle probability
-    allprobs[!is.na(obs[,2]),(m[1]+1):sum(m)] <- dwrpcauchy(obs[!is.na(obs[,2]),2],mu=lpn$co[2],rho=lpn$kappa[2])*allprobs[!is.na(obs[,2]),(m[1]+1):sum(m)]
-      
-    foo <- delta  
-    lscale <- 0
-    for (i in 1:n){
-      foo <- foo%*%gamma*allprobs[i,]  
-      sumfoo <- sum(foo)
-      lscale <- lscale+log(sumfoo)
-      foo <- foo/sumfoo
-    }
-    mllk.all <- mllk.all-lscale  
-  } 
-  return(mllk.all)
-}
-
-# M2: Bears of different diet differ in their the number of steps in a behaviour (negative binomial size)
-# M2B: Differ in both intensive and extensive behaviours
-m2b.HSMM.mllk <- function(parvect,OBS){
-  n.ind <- ncol(OBS)/2
-  M <- "M2B" # Define the model used
   lpn <- move.HSMM.pw2pn(parvect,M) # Transforming the parameters
   mllk.all <- 0 # Starting the likelihood
   for (ani in 1:n.ind){
@@ -286,15 +151,23 @@ m2b.HSMM.mllk <- function(parvect,OBS){
     
     # For behaviour 1
     # Step length probability
-    allprobs[!is.na(obs[,1]),1:m[1]] <- dweibull(obs[!is.na(obs[,1]),1],shape=lpn$b[1],scale=lpn$a[1])
+    allprobs[!is.na(obs[,1]),1:m[1]] <- dweibull(obs[!is.na(obs[,1]),1],
+                                                 shape=lpn$b[1],
+                                                 scale=lpn$a[bearsCap$F_Group[ani]])
     # Turn angle probability
-    allprobs[!is.na(obs[,2]),1:m[1]] <- dwrpcauchy(obs[!is.na(obs[,2]),2],mu=lpn$co[1],rho=lpn$kappa[1])*allprobs[!is.na(obs[,2]),1:m[1]]
+    allprobs[!is.na(obs[,2]),1:m[1]] <- dwrpcauchy(obs[!is.na(obs[,2]),2],
+                                                   mu=lpn$co[1],
+                                                   rho=lpn$kappa[1])*allprobs[!is.na(obs[,2]),1:m[1]]
     
     # For behaviour 2
     # Step length probability
-    allprobs[!is.na(obs[,1]),(m[1]+1):sum(m)] <- dweibull(obs[!is.na(obs[,1]),1],shape=lpn$b[2],scale=lpn$a[2])
+    allprobs[!is.na(obs[,1]),(m[1]+1):sum(m)] <- dweibull(obs[!is.na(obs[,1]),1],
+                                                          shape=lpn$b[2],
+                                                          scale=lpn$a[nDiet+bearsCap$F_Group[ani]])
     # Turn angle probability
-    allprobs[!is.na(obs[,2]),(m[1]+1):sum(m)] <- dwrpcauchy(obs[!is.na(obs[,2]),2],mu=lpn$co[2],rho=lpn$kappa[2])*allprobs[!is.na(obs[,2]),(m[1]+1):sum(m)]
+    allprobs[!is.na(obs[,2]),(m[1]+1):sum(m)] <- dwrpcauchy(obs[!is.na(obs[,2]),2],
+                                                            mu=lpn$co[2],
+                                                            rho=lpn$kappa[2])*allprobs[!is.na(obs[,2]),(m[1]+1):sum(m)]
     
     foo <- delta  
     lscale <- 0
@@ -308,85 +181,6 @@ m2b.HSMM.mllk <- function(parvect,OBS){
   } 
   return(mllk.all)
 }
-
-# M2I: Differ in intensive behaviour (potentially foraging)
-m2i.HSMM.mllk <- function(parvect,OBS){
-  n.ind <- ncol(OBS)/2
-  M <- "M2I" # Define the model used
-  lpn <- move.HSMM.pw2pn(parvect,M) # Transforming the parameters
-  mllk.all <- 0 # Starting the likelihood
-  for (ani in 1:n.ind){
-    gamma <- genGamma(m,lpn$gamLam[c(bearsCap$F_Group[ani], nDiet+1)]) # Creating transition probility matrix 
-    delta <- solve(t(diag(sum(m))-gamma+1),rep(1,sum(m))) # Getting the probility of the first step - stationary distribution
-    obs <- OBS[,((ani-1)*2+1):((ani-1)*2+2)]
-    n <- max(which(!is.na(obs[,1])))
-    obs <- obs[1:n,]
-    allprobs <- matrix(rep(1,sum(m)*n),nrow=n)
-    
-    # For behaviour 1
-    # Step length probability
-    allprobs[!is.na(obs[,1]),1:m[1]] <- dweibull(obs[!is.na(obs[,1]),1],shape=lpn$b[1],scale=lpn$a[1])
-    # Turn angle probability
-    allprobs[!is.na(obs[,2]),1:m[1]] <- dwrpcauchy(obs[!is.na(obs[,2]),2],mu=lpn$co[1],rho=lpn$kappa[1])*allprobs[!is.na(obs[,2]),1:m[1]]
-    
-    # For behaviour 2
-    # Step length probability
-    allprobs[!is.na(obs[,1]),(m[1]+1):sum(m)] <- dweibull(obs[!is.na(obs[,1]),1],shape=lpn$b[2],scale=lpn$a[2])
-    # Turn angle probability
-    allprobs[!is.na(obs[,2]),(m[1]+1):sum(m)] <- dwrpcauchy(obs[!is.na(obs[,2]),2],mu=lpn$co[2],rho=lpn$kappa[2])*allprobs[!is.na(obs[,2]),(m[1]+1):sum(m)]
-
-    foo <- delta  
-    lscale <- 0
-    for (i in 1:n){
-      foo <- foo%*%gamma*allprobs[i,]  
-      sumfoo <- sum(foo)
-      lscale <- lscale+log(sumfoo)
-      foo <- foo/sumfoo
-    }
-    mllk.all <- mllk.all-lscale  
-  } 
-  return(mllk.all)
-}
-
-# M2E: Differ in extensive behaviour (potentially travelling)
-m2e.HSMM.mllk <- function(parvect,OBS){
-  n.ind <- ncol(OBS)/2
-  M <- "M2E" # Define the model used
-  lpn <- move.HSMM.pw2pn(parvect,M) # Transforming the parameters
-  mllk.all <- 0 # Starting the likelihood
-  for (ani in 1:n.ind){
-    gamma <- genGamma(m,lpn$gamLam[c(1, 1+bearsCap$F_Group[ani])]) # Creating transition probility matrix - reparametrised
-    delta <- solve(t(diag(sum(m))-gamma+1),rep(1,sum(m))) # Getting the probility of the first step - stationary distribution
-    obs <- OBS[,((ani-1)*2+1):((ani-1)*2+2)]
-    n <- max(which(!is.na(obs[,1])))
-    obs <- obs[1:n,]
-    allprobs <- matrix(rep(1,sum(m)*n),nrow=n)
-    
-    # For behaviour 1
-    # Step length probability
-    allprobs[!is.na(obs[,1]),1:m[1]] <- dweibull(obs[!is.na(obs[,1]),1],shape=lpn$b[1],scale=lpn$a[1])
-    # Turn angle probability
-    allprobs[!is.na(obs[,2]),1:m[1]] <- dwrpcauchy(obs[!is.na(obs[,2]),2],mu=lpn$co[1],rho=lpn$kappa[1])*allprobs[!is.na(obs[,2]),1:m[1]]
-    
-    # For behaviour 2
-    # Step length probability
-    allprobs[!is.na(obs[,1]),(m[1]+1):sum(m)] <- dweibull(obs[!is.na(obs[,1]),1],shape=lpn$b[2],scale=lpn$a[2])
-    # Turn angle probability
-    allprobs[!is.na(obs[,2]),(m[1]+1):sum(m)] <- dwrpcauchy(obs[!is.na(obs[,2]),2],mu=lpn$co[2],rho=lpn$kappa[2])*allprobs[!is.na(obs[,2]),(m[1]+1):sum(m)]
-    
-    foo <- delta  
-    lscale <- 0
-    for (i in 1:n){
-      foo <- foo%*%gamma*allprobs[i,]  
-      sumfoo <- sum(foo)
-      lscale <- lscale+log(sumfoo)
-      foo <- foo/sumfoo
-    }
-    mllk.all <- mllk.all-lscale  
-  } 
-  return(mllk.all)
-}
-
 
 ########################################
 # Parameters used accros models
@@ -411,7 +205,7 @@ stepm <- 500
 a0 <- c(0.8,0.9) # Weibull scale parameters - for all individual
 
 ## run the numerical maximization
-m0HSMM <- HSMMmle(OBS,a0,b0,kappa0,gammaLam0,co0,m0.HSMM.mllk,"M0")
+m0HSMM <- HSMMmle(OBS,a0,b0,kappa0,gammaLam0,co0,"M0")
 m0HSMM
 
 # means (note that I reversed a & b compared to dweibull)
@@ -424,7 +218,7 @@ m0HSMM$a[2]*gamma(1+1/m0HSMM$b[2])
 a0 <- c(rep(0.8,nDiet),rep(0.9,nDiet)) # Weibull scale parameters - for all individual
 
 ## run the numerical maximization
-m1bHSMM <- HSMMmle(OBS,a0,b0,kappa0,gammaLam0,co0,m1b.HSMM.mllk,"M1B")
+m1bHSMM <- HSMMmle(OBS,a0,b0,kappa0,gammaLam0,co0,"M1B")
 m1bHSMM
 
 ###
@@ -433,7 +227,7 @@ m1bHSMM
 a0 <- c(rep(0.8,nDiet), 0.9) # Weibull scale parameters - for all individual
 
 ## run the numerical maximization
-m1iHSMM <- HSMMmle(OBS,a0,b0,kappa0,gammaLam0,co0,m1i.HSMM.mllk,"M1I")
+m1iHSMM <- HSMMmle(OBS,a0,b0,kappa0,gammaLam0,co0,"M1I")
 m1iHSMM
 
 ###
@@ -442,7 +236,7 @@ m1iHSMM
 a0 <- c(0.8, rep(0.9,nDiet)) # Weibull scale parameters - for all individual
 
 ## run the numerical maximization
-m1eHSMM <- HSMMmle(OBS,a0,b0,kappa0,gammaLam0,co0,m1e.HSMM.mllk,"M1E")
+m1eHSMM <- HSMMmle(OBS,a0,b0,kappa0,gammaLam0,co0,"M1E")
 m1eHSMM
 
 ###
@@ -452,7 +246,7 @@ a0 <- c(0.8, 0.9) # Weibull scale parameters - for all individual
 gammaLam0 <- c(rep(3,nDiet),rep(1,nDiet))  # state dwell-time parameters
 
 ## run the numerical maximization
-m2bHSMM <- HSMMmle(OBS,a0,b0,kappa0,gammaLam0,co0,m2b.HSMM.mllk,"M2B")
+m2bHSMM <- HSMMmle(OBS,a0,b0,kappa0,gammaLam0,co0, "M2B")
 m2bHSMM
 
 ###
@@ -461,7 +255,7 @@ m2bHSMM
 gammaLam0 <- c(rep(0.39,nDiet),3.75)  # negative binomial state dwell-time size parameters
 
 ## run the numerical maximization
-m2iHSMM <- HSMMmle(OBS,a0,b0,kappa0,gammaLam0,co0,m2i.HSMM.mllk,"M2I")
+m2iHSMM <- HSMMmle(OBS,a0,b0,kappa0,gammaLam0,co0, "M2I")
 m2iHSMM
 
 ###
@@ -470,7 +264,7 @@ m2iHSMM
 gammaLam0 <- c(0.39,rep(3.75,nDiet))  # negative binomial state dwell-time size parameters
 
 ## run the numerical maximization
-m2eHSMM <- HSMMmle(OBS,a0,b0,kappa0,gammaLam0,co0,m2e.HSMM.mllk,"M2E")
+m2eHSMM <- HSMMmle(OBS,a0,b0,kappa0,gammaLam0,co0,"M2E")
 m2eHSMM
 
 

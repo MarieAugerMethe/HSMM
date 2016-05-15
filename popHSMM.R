@@ -1,3 +1,4 @@
+#!#
 #########################################################
 # Based on the code from Langrock et al. 2012
 # Fit the different models to the bear population
@@ -10,6 +11,14 @@
   # M2I: Differ in intensive behaviour (potentially foraging)
   # M2E: Differ in extensive behaviour (potentially travelling)
   # M2B: Differ in both intensive and extensive behaviours
+# M3: Bears of different diets differ in how correlated their movement is (rho from wrapped Cauchy)
+  # M3I: Differ in intensive behaviour (potentially foraging)
+  # M3E: Differ in extensive behaviour (potentially travelling)
+  # M3B: Differ in both intensive and extensive behaviours
+# M4: Bears of different diets differ in their mean turning angle (mu from wrapped Cauchy)
+  # M4I: Differ in intensive behaviour (potentially foraging)
+  # M4E: Differ in extensive behaviour (potentially travelling)
+  # M4B: Differ in both intensive and extensive behaviours
 
 #####
 # Load packages
@@ -74,7 +83,8 @@ move.HSMM.pn2pw <- function(a,b,kapp,gamLam,co){
   tb <- log(b)
   tkappa <- logit(kapp)
   tgamLam <- log(gamLam) # Mean number of step poisson
-  tco <- c(log((co[1])/(2*pi-co[1])),log((pi+co[2])/(pi-co[2])))
+  #tco <- c(log((co[1])/(2*pi-co[1])),log((pi+co[2])/(pi-co[2])))
+  tco <- co
   parvect <- c(ta,tb,tkappa,tgamLam,tco)
   return(parvect)
 }
@@ -83,10 +93,10 @@ move.HSMM.pn2pw <- function(a,b,kapp,gamLam,co){
 move.HSMM.pw2pn <- function(parvect,M){
   epar <- exp(parvect)
   aE <- 2
+  rE <- 2
   gE <- 2
   #"M0"
   a <- rep(epar[1:2], each=nDiet)
-  b <- rep(epar[3:4], each=nDiet)
   if(M == "M1B"){
     aE <- 2*nDiet
     a <- epar[1:aE]
@@ -99,27 +109,67 @@ move.HSMM.pw2pn <- function(parvect,M){
     aE <- nDiet + 1
     a <- c(rep(epar[1], nDiet), epar[2:aE])
   }
-  
-  #a <- epar[1:aE]
   b <- epar[aE+(1:2)]
-  kapp <- inv.logit(parvect[aE+(3:4)])
-  gamLam <- c(rep(epar[aE+5],nDiet), rep(epar[aE+6],nDiet))
+
+  kapp <- rep(inv.logit(parvect[aE+(3:4)]),each=nDiet)
+  if(M == "M3B"){
+    rE <- 2*nDiet
+    kapp <- epar[aE+(1:rE)]
+  }
+  if(M == "M3I"){
+    rE <- nDiet + 1
+    kapp <- c(epar[aE+(1:nDiet)], rep(epar[aE+rE], nDiet))
+  }
+  if(M == "M3E"){
+    rE <- nDiet + 1
+    kapp <- c(rep(epar[aE+1], nDiet), epar[aE+(2:rE)])
+  }
+
+  gamLam <- c(rep(epar[aE+rE+3],nDiet), rep(epar[aE+rE+4],nDiet))
   if(M == "M2B"){
     gE <- 2*nDiet
-    gamLam <- epar[aE+(4+(1:gE))]
+    gamLam <- epar[aE+rE+(2+(1:gE))]
   }
   if(M == "M2I"){
     gE <- nDiet + 1
-    gamLam <- c(epar[aE+(4+(1:nDiet))], rep(epar[aE+(4+(gE))],nDiet)) 
+    gamLam <- c(epar[aE+rE+(2+(1:nDiet))], rep(epar[aE+rE+(2+(gE))],nDiet)) 
   }
   if(M == "M2E"){
     gE <- nDiet + 1
-    gamLam <- c(rep(epar[aE+5],nDiet), epar[aE+(4+(2:gE))])
+    gamLam <- c(rep(epar[aE+rE+3],nDiet), epar[aE+rE+(2+(2:gE))])
   }
   
-  co <- c(2*pi*inv.logit(parvect[aE+gE+5]),pi*(exp(parvect[aE+gE+6])-1)/(exp(parvect[aE+gE+6])+1))
-  return(list(a=a,b=b,kappa=kapp,gamLam=gamLam,co=co))
+#   co <- c(rep(2*pi*inv.logit(parvect[aE+rE+gE+3]),nDiet),
+#           rep(pi*(exp(parvect[aE+rE+gE+4])-1)/(exp(parvect[aE+rE+gE+4])+1),nDiet))
+#   if(M == "M4B"){
+#     co <- c(2*pi*inv.logit(parvect[aE+rE+gE+2+(1:nDiet)]),
+#             pi*(exp(parvect[aE+rE+gE+2+nDiet+(1:nDiet)])-1)/(exp(parvect[aE+rE+gE+2+nDiet+(1:nDiet)])+1))
+#   }
+#   if(M == "M4I"){
+#     co <- c(2*pi*inv.logit(parvect[aE+rE+gE+2+(1:nDiet)]),
+#             rep(pi*(exp(parvect[aE+rE+gE+3+nDiet])-1)/(exp(parvect[aE+rE+gE+3+nDiet])+1),nDiet))
+#   }
+#   if(M == "M4E"){
+#     co <- c(rep(2*pi*inv.logit(parvect[aE+rE+gE+3]),nDiet),
+#             pi*(exp(parvect[aE+rE+gE+3+(1:nDiet)])-1)/(exp(parvect[aE+rE+gE+3+(1:nDiet)])+1))
+#   }
   
+  co <- c(rep(parvect[aE+rE+gE+3],nDiet),
+          rep(parvect[aE+rE+gE+4],nDiet))
+  if(M == "M4B"){
+    co <- c(parvect[aE+rE+gE+2+(1:nDiet)],
+            parvect[aE+rE+gE+2+nDiet+(1:nDiet)])
+  }
+  if(M == "M4I"){
+    co <- c(parvect[aE+rE+gE+2+(1:nDiet)],
+            parvect[aE+rE+gE+3+nDiet],nDiet)
+  }
+  if(M == "M4E"){
+    co <- c(rep(parvect[aE+rE+gE+3],nDiet),
+            parvect[aE+rE+gE+3+(1:nDiet)])
+  }
+  
+  return(list(a=a,b=b,kappa=kapp,gamLam=gamLam,co=co))
 }
 
 ###
@@ -156,8 +206,8 @@ HSMMmllk <- function(parvect,OBS, M){
                                                  scale=lpn$a[bearsCap$F_Group[ani]])
     # Turn angle probability
     allprobs[!is.na(obs[,2]),1:m[1]] <- dwrpcauchy(obs[!is.na(obs[,2]),2],
-                                                   mu=lpn$co[1],
-                                                   rho=lpn$kappa[1])*allprobs[!is.na(obs[,2]),1:m[1]]
+                                                   mu=lpn$co[bearsCap$F_Group[ani]],
+                                                   rho=lpn$kappa[bearsCap$F_Group[ani]])*allprobs[!is.na(obs[,2]),1:m[1]]
     
     # For behaviour 2
     # Step length probability
@@ -166,8 +216,8 @@ HSMMmllk <- function(parvect,OBS, M){
                                                           scale=lpn$a[nDiet+bearsCap$F_Group[ani]])
     # Turn angle probability
     allprobs[!is.na(obs[,2]),(m[1]+1):sum(m)] <- dwrpcauchy(obs[!is.na(obs[,2]),2],
-                                                            mu=lpn$co[2],
-                                                            rho=lpn$kappa[2])*allprobs[!is.na(obs[,2]),(m[1]+1):sum(m)]
+                                                            mu=lpn$co[nDiet+bearsCap$F_Group[ani]],
+                                                            rho=lpn$kappa[nDiet+bearsCap$F_Group[ani]])*allprobs[!is.na(obs[,2]),(m[1]+1):sum(m)]
     
     foo <- delta  
     lscale <- 0
@@ -266,6 +316,55 @@ gammaLam0 <- c(0.39,rep(3.75,nDiet))  # negative binomial state dwell-time size 
 ## run the numerical maximization
 m2eHSMM <- HSMMmle(OBS,a0,b0,kappa0,gammaLam0,co0,"M2E")
 m2eHSMM
+
+###
+# Fitting M3B
+## initial parameter values to be used in the numerical maximization (several different combinations should be tried in order to ensure hitting the global maximum)
+a0 <- c(0.8, 0.9) # Weibull scale parameters - for all individual
+gammaLam0 <- c(1,2) # poisson lambda state dwell-time number of step
+kappa0 <- c(rep(0.2,nDiet),rep(0.4,nDiet)) # wrapped Cauchy concentration parameters
+
+## run the numerical maximization
+m3bHSMM <- HSMMmle(OBS,a0,b0,kappa0,gammaLam0,co0, "M3B")
+m3bHSMM
+
+
+###
+# Fitting M3I
+## initial parameter values to be used in the numerical maximization (several different combinations should be tried in order to ensure hitting the global maximum)
+kappa0 <- c(rep(0.2,nDiet),0.4) # wrapped Cauchy concentration parameters
+
+m3iHSMM <- HSMMmle(OBS,a0,b0,kappa0,gammaLam0,co0, "M3I")
+m3iHSMM
+
+###
+# Fitting M3E
+## initial parameter values to be used in the numerical maximization (several different combinations should be tried in order to ensure hitting the global maximum)
+kappa0 <- c(0.2,rep(0.4,nDiet)) # wrapped Cauchy concentration parameters
+
+m3eHSMM <- HSMMmle(OBS,a0,b0,kappa0,gammaLam0,co0,"M3E")
+m3eHSMM
+
+###
+# Fitting M4B
+## initial parameter values to be used in the numerical maximization (several different combinations should be tried in order to ensure hitting the global maximum)
+kappa0 <- c(0.2,0.4) # wrapped Cauchy concentration parameters
+co0 <- rep(c(pi,0),each=nDiet) # wrapped Cauchy mean parameters
+
+m4bHSMM <- HSMMmle(OBS,a0,b0,kappa0,gammaLam0,co0, "M4B")
+m4bHSMM
+
+###
+# Fitting M4I
+co0 <- c(rep(pi,nDiet),0) # wrapped Cauchy mean parameters
+m4iHSMM <- HSMMmle(OBS,a0,b0,kappa0,gammaLam0,co0, "M4I")
+m4iHSMM
+
+###
+# Fitting M4E
+co0 <- c(pi,rep(0,nDiet)) # wrapped Cauchy mean parameters
+m4eHSMM <- HSMMmle(OBS,a0,b0,kappa0,gammaLam0,co0, "M4E")
+m4eHSMM
 
 
 # Compare AIC
